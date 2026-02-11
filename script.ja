@@ -1,0 +1,245 @@
+var issues = [];
+var nextId = 1;
+
+var form = document.querySelector("#exception-form");
+var errorEl = document.querySelector("#form-error");
+var tbody = document.querySelector("#exceptions-tbody");
+var emptyStateEl = document.querySelector("#empty-state");
+
+var filterIssueType = document.querySelector("#filterIssueType");
+var filterStatus = document.querySelector("#filterStatus");
+
+var openCountEl = document.querySelector("#open-count");
+var resolvedCountEl = document.querySelector("#resolved-count");
+
+// Helpers
+function getSelectedPriority() {
+  var radios = document.getElementsByName("priority");
+  for (var i = 0; i < radios.length; i++) {
+    if (radios[i].checked) {
+      return radios[i].value;
+    }
+  }
+  return "";
+}
+
+function resetForm() {
+  form.reset();
+  errorEl.textContent = "";
+}
+
+function updateCounts() {
+  var open = 0;
+  var resolved = 0;
+
+  for (var i = 0; i < issues.length; i++) {
+    if (issues[i].status === "Open") {
+      open++;
+    } else if (issues[i].status === "Resolved") {
+      resolved++;
+    }
+  }
+
+  openCountEl.textContent = open;
+  resolvedCountEl.textContent = resolved;
+}
+
+function applyFiltersToRow(tr, issue) {
+  var typeFilterValue = filterIssueType.value;
+  var statusFilterValue = filterStatus.value;
+
+  var matchesType =
+    typeFilterValue === "all" || issue.issueType === typeFilterValue;
+  var matchesStatus =
+    statusFilterValue === "all" || issue.status === statusFilterValue;
+
+  if (matchesType && matchesStatus) {
+    tr.style.display = "";
+  } else {
+    tr.style.display = "none";
+  }
+}
+
+function applyFiltersToAllRows() {
+  for (var i = 0; i < issues.length; i++) {
+    var issue = issues[i];
+    var row = document.querySelector('tr[data-id="' + issue.id + '"]');
+    if (row) {
+      applyFiltersToRow(row, issue);
+    }
+  }
+
+  // Update empty state visibility
+  var visibleRows = tbody.querySelectorAll("tr:not([style*='display: none'])");
+  emptyStateEl.style.display = visibleRows.length === 0 ? "block" : "none";
+}
+
+function createRow(issue) {
+  var tr = document.createElement("tr");
+  tr.setAttribute("data-id", issue.id);
+
+  if (issue.priority === "High") {
+    tr.classList.add("row-high-priority");
+  }
+
+  // Delivery ID
+  var tdDelivery = document.createElement("td");
+  tdDelivery.textContent = issue.deliveryId;
+  tr.appendChild(tdDelivery);
+
+  // Customer Name
+  var tdCustomer = document.createElement("td");
+  tdCustomer.textContent = issue.customerName;
+  tr.appendChild(tdCustomer);
+
+  // Issue Type
+  var tdIssueType = document.createElement("td");
+  tdIssueType.textContent = issue.issueType;
+  tr.appendChild(tdIssueType);
+
+  // Priority
+  var tdPriority = document.createElement("td");
+  tdPriority.textContent = issue.priority;
+  tr.appendChild(tdPriority);
+
+  // Status
+  var tdStatus = document.createElement("td");
+  var statusSpan = document.createElement("span");
+  statusSpan.classList.add("status-pill", "status-open");
+  statusSpan.textContent = "Open";
+  tdStatus.appendChild(statusSpan);
+  tr.appendChild(tdStatus);
+
+  // Actions
+  var tdActions = document.createElement("td");
+
+  var resolveBtn = document.createElement("button");
+  resolveBtn.textContent = "Resolve";
+  resolveBtn.classList.add("btn", "btn-resolve", "btn-resolve-action");
+  resolveBtn.type = "button";
+
+  var deleteBtn = document.createElement("button");
+  deleteBtn.textContent = "Delete";
+  deleteBtn.classList.add("btn", "btn-delete", "btn-delete-action");
+  deleteBtn.type = "button";
+  deleteBtn.style.marginLeft = "6px";
+
+  tdActions.appendChild(resolveBtn);
+  tdActions.appendChild(deleteBtn);
+  tr.appendChild(tdActions);
+
+  tbody.appendChild(tr);
+  emptyStateEl.style.display = "none";
+
+  applyFiltersToRow(tr, issue);
+}
+
+// Form submit
+form.addEventListener("submit", function (event) {
+  event.preventDefault();
+  errorEl.textContent = "";
+
+  var deliveryId = document.querySelector("#deliveryId").value.trim();
+  var customerName = document.querySelector("#customerName").value.trim();
+  var issueType = document.querySelector("#issueType").value;
+  var priority = getSelectedPriority();
+  var notes = document.querySelector("#notes").value.trim();
+
+  if (!deliveryId || !customerName || !issueType || !priority) {
+    errorEl.textContent = "Please fill in all required fields.";
+    return;
+  }
+
+  var issue = {
+    id: nextId++,
+    deliveryId: deliveryId,
+    customerName: customerName,
+    issueType: issueType,
+    priority: priority,
+    notes: notes,
+    status: "Open"
+  };
+
+  issues.push(issue);
+  createRow(issue);
+  updateCounts();
+  resetForm();
+});
+
+// Event delegation for table actions
+tbody.addEventListener("click", function (event) {
+  var target = event.target;
+
+  // Resolve
+  if (target.classList.contains("btn-resolve-action")) {
+    var tr = target.closest("tr");
+    var id = parseInt(tr.getAttribute("data-id"), 10);
+
+    var issue = null;
+    for (var i = 0; i < issues.length; i++) {
+      if (issues[i].id === id) {
+        issue = issues[i];
+        break;
+      }
+    }
+    if (!issue || issue.status === "Resolved") {
+      return;
+    }
+
+    issue.status = "Resolved";
+
+    tr.classList.add("row-resolved");
+
+    var statusSpan = tr.querySelector(".status-pill");
+    if (statusSpan) {
+      statusSpan.textContent = "Resolved";
+      statusSpan.classList.remove("status-open");
+      statusSpan.classList.add("status-resolved");
+    }
+
+    target.disabled = true;
+    updateCounts();
+    applyFiltersToRow(tr, issue);
+  }
+
+  // Delete
+  if (target.classList.contains("btn-delete-action")) {
+    var confirmDelete = window.confirm(
+      "Are you sure you want to delete this issue?"
+    );
+    if (!confirmDelete) {
+      return;
+    }
+
+    var trDelete = target.closest("tr");
+    var idDelete = parseInt(trDelete.getAttribute("data-id"), 10);
+
+    // Remove from array (mark as deleted)
+    for (var j = 0; j < issues.length; j++) {
+      if (issues[j].id === idDelete) {
+        issues.splice(j, 1);
+        break;
+      }
+    }
+
+    tbody.removeChild(trDelete);
+    updateCounts();
+
+    if (tbody.children.length === 0) {
+      emptyStateEl.style.display = "block";
+    }
+  }
+});
+
+// Filters
+filterIssueType.addEventListener("change", function () {
+  applyFiltersToAllRows();
+});
+
+filterStatus.addEventListener("change", function () {
+  applyFiltersToAllRows();
+});
+
+// Initial state
+emptyStateEl.style.display = "block";
+updateCounts();
